@@ -1,20 +1,20 @@
 # torch for tensor operation
 import torch
-# Neural network modules and building blocks
+# network
 import torch.nn as nn
-# Functional interface for neural network operations
+# func for network
 import torch.nn.functional as F
-# Optimization algorithms (Adam, SGD, etc.)
+# adam
 import torch.optim as optim
-# Data loading utilities for training
+# load data for training
 from torch.utils.data import Dataset, DataLoader
-# Numerical operations (not used but commonly imported)
+# number operation
 import numpy as np
-# Mathematical functions like sqrt, log, etc.
+# math
 import math
-# Type hints for better code documentation
+# type
 from typing import Optional, Tuple
-# Regular expressions for text processing
+# regex
 import re
 
 # Dataset class to handle text data for PyTorch DataLoader
@@ -39,14 +39,15 @@ class TextDataset(Dataset):
         # Return tokens as PyTorch tensor with long dtype for indexing
         return torch.tensor(tokens, dtype=torch.long)
 
-# Simple tokenizer to convert text to numerical tokens and back
+# sample tokenizer
 class SimpleTokenizer:
     def __init__(self):
         # Initialize vocabulary with special tokens and their indices
         self.vocab = {'<pad>': 0, '<unk>': 1, '<start>': 2, '<end>': 3}
         # Track current vocabulary size
         self.vocab_size = 4
-        
+
+    # we build vocab   
     def build_vocab(self, texts):
         # Create set to store unique words from all texts
         words = set()
@@ -65,6 +66,7 @@ class SimpleTokenizer:
         
         # Create reverse mapping from index to word for decoding
         self.idx2word = {idx: word for word, idx in self.vocab.items()}
+        pass
     
     def encode(self, text, max_length=128):
         # Extract words from text using regex
@@ -306,13 +308,13 @@ class TextDiffusionModel:
         
         return loss
 
-# Main training function
+# train model
 def train_model():
-    # Use GPU if available, otherwise CPU
+    # if gpu
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
     
-    # Sample training texts for the model to learn from
+    # train text
     texts = [
         "the quick brown fox jumps over the lazy dog",
         "artificial intelligence is transforming the world",
