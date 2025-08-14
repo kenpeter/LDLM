@@ -56,7 +56,7 @@ class SimpleTokenizer:
             # Find all word boundaries and convert to lowercase
             words.update(re.findall(r'\b\w+\b', text.lower()))
         
-        # Add each unique word to vocabulary with unique index
+        # vocab to index
         for word in sorted(words):
             if word not in self.vocab:
                 # Assign current vocab_size as index for new word
@@ -64,7 +64,7 @@ class SimpleTokenizer:
                 # Increment vocab size for next word
                 self.vocab_size += 1
         
-        # Create reverse mapping from index to word for decoding
+        # this is index to word
         self.idx2word = {idx: word for word, idx in self.vocab.items()}
         pass
     
@@ -129,7 +129,7 @@ class PositionalEncoding(nn.Module):
         # Add positional encoding to input embeddings
         return x + self.pe[:, :x.size(1)]
 
-# Main transformer model for diffusion process
+# transformer
 class DiffusionTransformer(nn.Module):
     def __init__(self, vocab_size, d_model=256, nhead=8, num_layers=6, max_len=128):
         super().__init__()
