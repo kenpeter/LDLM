@@ -197,7 +197,7 @@ class TextDiffusionModel:
         # Size of vocabulary for token generation
         self.vocab_size = vocab_size
         
-        # Create and move transformer model to device
+        # put vocab into transformer
         self.model = DiffusionTransformer(vocab_size).to(device)
         
         # Create noise schedule using cosine schedule
@@ -226,12 +226,26 @@ class TextDiffusionModel:
         return torch.clip(betas, 0.0001, 0.9999)
     
     # this is for training
+    # x0: (4, 128) shape
+    # t: random time index
     def forward_diffusion(self, x0, t):
-        # Generate random noise tokens with same shape as input
+        # noise = torch.randint(0, 50, (4, 128))        
+        '''
+            noise = tensor([
+                [23, 7, 45, 12, 8, ...],   # Random token IDs for sentence 0
+                [41, 9, 26, 38, 5, ...],   # Random token IDs for sentence 1  
+                [35, 16, 3, 42, 28, ...],  # Random token IDs for sentence 2
+                [18, 31, 13, 4, 21, ...]   # Random token IDs for sentence 3
+            ])
+
+            23 like index to a word "neural"
+            so the shape still (4, 128)
+        '''
         noise = torch.randint(0, self.vocab_size, x0.shape, device=self.device)
         
-        # noise schedule val for current time step
+        # so how much keep original
         sqrt_alphas_cumprod_t = self.sqrt_alphas_cumprod[t].view(-1, 1)
+         # so how much noise (original + noise === full)
         sqrt_one_minus_alphas_cumprod_t = self.sqrt_one_minus_alphas_cumprod[t].view(-1, 1)
         
         # training does not go 0->1000 or 1000->0, it is random
@@ -279,8 +293,9 @@ class TextDiffusionModel:
             
             return x_prev
     
+    # after train, we sample
     def sample(self, shape, tokenizer):
-        # Start with pure noise (random tokens)
+        # start from noise, random tokens
         x = torch.randint(0, self.vocab_size, shape, device=self.device)
         
         # Iteratively denoise from max timesteps down to 0
@@ -293,7 +308,7 @@ class TextDiffusionModel:
         # Return final denoised sequence
         return x
     
-    # this is training
+    # x0 clean text
     def compute_loss(self, x0):
         # Get batch size from input
         batch_size = x0.shape[0]
@@ -326,19 +341,21 @@ class TextDiffusionModel:
 
                 there is threshold to mask as noise. which sub feature should corrupt.
         """
-        # e.g. random time step like index, t = [67, 234, 891, 45]
+        # 1. pick random timestep
+        # t = [67, 234, 891, 45]; t is random time index arr
         t = torch.randint(0, self.max_timesteps, (batch_size,), device=self.device)
         
-        # Apply forward diffusion to get noisy input and target noise
+        # 2. Corrupt clean text (forward diffusion)
         xt, noise = self.forward_diffusion(x0, t)
         
-        # Predict noise using model
+        # 3. Model predicts noise
         pred_noise_logits = self.model(xt, t)
         
-        # Calculate cross-entropy loss between predicted and actual noise
+        # 4. Calculate loss (prediction vs actual noise)
         loss = F.cross_entropy(pred_noise_logits.view(-1, self.vocab_size), 
                               noise.view(-1))
         
+        # only cal how wrong the model is
         return loss
 
 # train model
@@ -370,7 +387,7 @@ def train_model():
     dataset = TextDataset(texts, tokenizer)
     dataloader = DataLoader(dataset, batch_size=4, shuffle=True)
     
-    # Initialize diffusion model with vocabulary size
+    # put vocab into transformer
     diffusion_model = TextDiffusionModel(tokenizer.vocab_size, device=device)
     # Use Adam optimizer with learning rate 1e-4
     optimizer = optim.Adam(diffusion_model.model.parameters(), lr=1e-4)
@@ -379,24 +396,27 @@ def train_model():
     num_epochs = 100
     
     print("Starting training...")
-    # Main training loop over epochs
+    # train -> sample -> train -> sample
     for epoch in range(num_epochs):
         # Initialize loss tracking for this epoch
         total_loss = 0
         num_batches = 0
         
-        # Process each batch of data
         for batch in dataloader:
-            # Move batch to GPU/CPU
+            # device
             batch = batch.to(device)
+
+            # sequence_length, max len = 128
+            # x0.shape = (batch_size, sequence_length) = (4, 128)
             
-            # Clear gradients from previous step
+            # clear gradient from prev
             optimizer.zero_grad()
-            # Calculate loss using diffusion model
+
+            # 1. cal how wrong the model is
             loss = diffusion_model.compute_loss(batch)
-            # Backpropagate gradients
+            # 2. back gradient
             loss.backward()
-            # Update model parameters
+            # 3. update model
             optimizer.step()
             
             # Track loss for averaging
@@ -406,12 +426,13 @@ def train_model():
         # Calculate average loss for this epoch
         avg_loss = total_loss / num_batches
         
-        # Every 10 epochs, print progress and generate sample
+        # 2. we sample
         if epoch % 10 == 0:
             print(f"Epoch {epoch}, Loss: {avg_loss:.4f}")
             
             # Generate sample text to see training progress
             sample_shape = (1, 128)  # 1 sequence of length 128
+            # sample shape (1_seq, 128_len)
             generated = diffusion_model.sample(sample_shape, tokenizer)
             # Convert tokens back to readable text
             generated_text = tokenizer.decode(generated[0].cpu().numpy())
