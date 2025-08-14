@@ -225,6 +225,7 @@ class TextDiffusionModel:
         # Clip to prevent numerical instabilities
         return torch.clip(betas, 0.0001, 0.9999)
     
+    # forward diffusion
     def forward_diffusion(self, x0, t):
         # Generate random noise tokens with same shape as input
         noise = torch.randint(0, self.vocab_size, x0.shape, device=self.device)
@@ -290,10 +291,13 @@ class TextDiffusionModel:
         # Return final denoised sequence
         return x
     
+    # this is training
     def compute_loss(self, x0):
         # Get batch size from input
         batch_size = x0.shape[0]
-        # Sample random time steps for each batch item
+        # max_timesteps = 1000
+        # batch_size = 4
+        # t is each time step
         t = torch.randint(0, self.max_timesteps, (batch_size,), device=self.device)
         
         # Apply forward diffusion to get noisy input and target noise
