@@ -248,14 +248,11 @@ class TextDiffusionModel:
          # so how much noise (original + noise === full)
         sqrt_one_minus_alphas_cumprod_t = self.sqrt_one_minus_alphas_cumprod[t].view(-1, 1)
         
-        # training does not go 0->1000 or 1000->0, it is random
-        # Higher timestep → higher corruption probability
+        # training does not go 0->1000 or 1000->0, it is random, avoid full forgot
         noise_prob = sqrt_one_minus_alphas_cumprod_t
-        # Higher timestep → higher corruption probability
         original_prob = sqrt_alphas_cumprod_t
         
-        # gen random mask to decide which tokens to corrupt
-        # e.g. prob  [0.45, 0.12, 0.67, 0.89, 0.05]
+        # each row, if less than noise, add mask, has mask means true, means that block active, so add noise
         mask = torch.rand_like(x0.float()) < noise_prob
         # Apply noise where mask is True, keep original where False
         xt = torch.where(mask, noise, x0)
