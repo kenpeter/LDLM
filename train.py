@@ -225,21 +225,23 @@ class TextDiffusionModel:
         # Clip to prevent numerical instabilities
         return torch.clip(betas, 0.0001, 0.9999)
     
-    # forward diffusion
+    # this is for training
     def forward_diffusion(self, x0, t):
         # Generate random noise tokens with same shape as input
         noise = torch.randint(0, self.vocab_size, x0.shape, device=self.device)
         
-        # Get noise schedule values for current time steps
+        # noise schedule val for current time step
         sqrt_alphas_cumprod_t = self.sqrt_alphas_cumprod[t].view(-1, 1)
         sqrt_one_minus_alphas_cumprod_t = self.sqrt_one_minus_alphas_cumprod[t].view(-1, 1)
         
-        # Probability of replacing with noise (increases with time)
+        # training does not go 0->1000 or 1000->0, it is random
+        # Higher timestep → higher corruption probability
         noise_prob = sqrt_one_minus_alphas_cumprod_t
-        # Probability of keeping original (decreases with time)
+        # Higher timestep → higher corruption probability
         original_prob = sqrt_alphas_cumprod_t
         
-        # Create random mask to decide which tokens to noise
+        # gen random mask to decide which tokens to corrupt
+        # e.g. prob  [0.45, 0.12, 0.67, 0.89, 0.05]
         mask = torch.rand_like(x0.float()) < noise_prob
         # Apply noise where mask is True, keep original where False
         xt = torch.where(mask, noise, x0)
@@ -295,9 +297,36 @@ class TextDiffusionModel:
     def compute_loss(self, x0):
         # Get batch size from input
         batch_size = x0.shape[0]
-        # max_timesteps = 1000
-        # batch_size = 4
-        # t is each time step
+        """
+            self.sqrt_one_minus_alphas_cumprod = [
+                0.0,   # index 0   → 0% corruption
+                0.01,  # index 1   → 1% corruption  
+                0.02,  # index 2   → 2% corruption
+                ...
+                0.07,  # index 67  → 7% corruption
+                ...
+                0.23,  # index 234 → 23% corruption
+                ...
+                0.50,  # index 500 → 50% corruption
+                ...
+                0.89,  # index 891 → 89% corruption
+                ...
+                0.99   # index 1000 → 99% corruption
+            ]
+
+            by index [67, 234, 891, 45]
+
+            noise_prob = [0.07, 0.23, 0.89, 0.05]
+
+            
+                sentence_0: "the quick brown fox" → corrupt with 7% probability  (t=67)
+                sentence_1: "AI is amazing"       → corrupt with 23% probability (t=234)
+                sentence_2: "neural networks"     → corrupt with 89% probability (t=891)
+                sentence_3: "machine learning"    → corrupt with 5% probability  (t=45)
+
+                there is threshold to mask as noise. which sub feature should corrupt.
+        """
+        # e.g. random time step like index, t = [67, 234, 891, 45]
         t = torch.randint(0, self.max_timesteps, (batch_size,), device=self.device)
         
         # Apply forward diffusion to get noisy input and target noise
